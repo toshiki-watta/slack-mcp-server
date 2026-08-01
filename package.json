@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "npx -y @modelcontextprotocol/server-slack --transport sse"
+    "start": "node index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/server-slack": "latest"
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/server-slack": "latest",
+    "express": "^4.21.0"
   }
 }
