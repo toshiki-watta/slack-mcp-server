@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-  "start": "supergateway --stdio \"npx -y @modelcontextprotocol/server-slack\" --port $PORT"
-  },
+    "start": "supergateway --stdio \"npx -y @modelcontextprotocol/server-slack\" --port ${PORT:-8000} --cors"
+  }
   "dependencies": {
     "supergateway": "latest"
   }
