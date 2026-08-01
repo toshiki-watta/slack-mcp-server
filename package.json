@@ -6,6 +6,6 @@
     "start": "supergateway --stdio \"npx -y @modelcontextprotocol/server-slack\" --baseUrl https://slack-mcp-server-fq9a.onrender.com"
   },
   "dependencies": {
-    "supergateway": "^1.8.0"
+    "supergateway": "latest"
   }
 }
