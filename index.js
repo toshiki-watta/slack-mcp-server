@@ -1,29 +1,58 @@
 import express from 'express';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { createServer } from '@modelcontextprotocol/server-slack';
+import { spawn } from 'child_process';
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-let transport;
+app.use(express.json());
 
-app.get('/sse', async (req, res) => {
-  transport = new SSEServerTransport('/message', res);
-  const server = createServer({
-    token: process.env.SLACK_BOT_TOKEN,
-    teamId: process.env.SLACK_TEAM_ID,
+let mcpProcess = null;
+
+// MCPサーバー（stdio）の起動
+function startMcpProcess() {
+  if (mcpProcess) return mcpProcess;
+
+  mcpProcess = spawn('npx', ['-y', '@modelcontextprotocol/server-slack'], {
+    env: {
+      ...process.env,
+      SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
+      SLACK_TEAM_ID: process.env.SLACK_TEAM_ID,
+    },
+    stdio: ['pipe', 'pipe', 'inherit'],
   });
-  await server.connect(transport);
+
+  mcpProcess.on('exit', (code) => {
+    console.log(`MCP process exited with code ${code}`);
+    mcpProcess = null;
+  });
+
+  return mcpProcess;
+}
+
+// ヘルスチェック用
+app.get('/', (req, res) => {
+  res.send('Slack MCP Wrapper Server is Running');
 });
 
-app.post('/message', async (req, res) => {
-  if (transport) {
-    await transport.handlePostMessage(req, res);
-  } else {
-    res.status(400).send('SSE connection not established');
-  }
+// SSE エンドポイント
+app.get('/sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const proc = startMcpProcess();
+
+  const onData = (data) => {
+    res.write(`data: ${data.toString()}\n\n`);
+  };
+
+  proc.stdout.on('data', onData);
+
+  req.on('close', () => {
+    proc.stdout.off('data', onData);
+  });
 });
 
 app.listen(port, () => {
-  console.log(`Slack MCP Server listening on port ${port}`);
+  console.log(`Slack MCP Wrapper listening on port ${port}`);
 });
