@@ -2,12 +2,10 @@
   "name": "slack-mcp-server",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "supergateway --stdio \"npx -y @modelcontextprotocol/server-slack\" --baseUrl https://slack-mcp-server-fq9a.onrender.com"
   },
   "dependencies": {
-    "@modelcontextprotocol/server-slack": "latest",
-    "express": "^4.21.0"
+    "supergateway": "^1.8.0"
   }
 }
