@@ -7,6 +7,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/server-slack": "^0.6.2",
-    "supergateway": "^1.10.1"
+    "supergateway": "^3.4.3"
   }
 }
