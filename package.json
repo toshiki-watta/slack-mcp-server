@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "supergateway --stdio \"npx -y @modelcontextprotocol/server-slack\" --baseUrl https://slack-mcp-server-fq9a.onrender.com"
+  "start": "supergateway --stdio \"npx -y @modelcontextprotocol/server-slack\" --port $PORT"
   },
   "dependencies": {
     "supergateway": "latest"
