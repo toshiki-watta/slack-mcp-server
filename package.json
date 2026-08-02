@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "supergateway --stdio \"npx -y @modelcontextprotocol/server-slack\" --port $PORT --cors --streamable-stdio"
+    "start": "node index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/server-slack": "^0.6.2",
-    "supergateway": "^3.4.3"
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@slack/web-api": "^7.0.0",
+    "express": "^4.19.0"
   }
 }
