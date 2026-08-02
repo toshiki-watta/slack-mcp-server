@@ -7,6 +7,17 @@ import { WebClient } from "@slack/web-api";
 const app = express();
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
+// CORSを全面的に許可（Geminiからのリクエストをブロックさせない）
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-mcp-session-id");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // MCP サーバーの初期化
 const server = new Server(
   { name: "slack-mcp-server", version: "1.0.0" },
@@ -52,14 +63,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   throw new Error("Tool not found");
 });
 
-// ヘルスチェック用エンドポイント
+// ヘルスチェック用
 app.get("/", (req, res) => {
   res.send("Slack MCP Server is Running!");
 });
 
-// SSE 接続用エンドポイント
+// SSE (Server-Sent Events) エンドポイント
 let transport;
 app.get("/sse", async (req, res) => {
+  // SSEに必要なHTTPヘッダーを明示的にセット
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // Nginx/Proxyのバッファリング無効化
+
   transport = new SSEServerTransport("/messages", res);
   await server.connect(transport);
 });
