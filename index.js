@@ -7,14 +7,12 @@ import { WebClient } from "@slack/web-api";
 const app = express();
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
-// CORSを全面的に許可（Geminiからのリクエストをブロックさせない）
+// CORSを全面的に許可
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-mcp-session-id");
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
+  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
@@ -24,7 +22,7 @@ const server = new Server(
   { capabilities: { tools: {} } }
 );
 
-// ツール一覧を定義
+// ツール定義
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -44,7 +42,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// ツール呼び出し時の処理
+// ツール実行ハンドラー
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "send_slack_message") {
     const { channel, text } = request.params.arguments;
@@ -63,26 +61,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   throw new Error("Tool not found");
 });
 
-// ヘルスチェック用
-app.get("/", (req, res) => {
-  res.send("Slack MCP Server is Running!");
-});
+// SSE接続の管理マップ（複数セッション対応）
+const transports = new Map();
 
-// SSE (Server-Sent Events) エンドポイント
-let transport;
-app.get("/sse", async (req, res) => {
-  // SSEに必要なHTTPヘッダーを明示的にセット
+// SSEハンドラー本体
+const handleSse = async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no"); // Nginx/Proxyのバッファリング無効化
+  res.setHeader("X-Accel-Buffering", "no");
 
-  transport = new SSEServerTransport("/messages", res);
+  const transport = new SSEServerTransport("/messages", res);
+  transports.set(transport.sessionId, transport);
+
+  req.on("close", () => {
+    transports.delete(transport.sessionId);
+  });
+
   await server.connect(transport);
-});
+};
 
-// メッセージ受信用エンドポイント
+// ルートと /sse の両方で SSE を受付可能にする
+app.get("/", handleSse);
+app.get("/sse", handleSse);
+
+// POSTメッセージ受信用
 app.post("/messages", async (req, res) => {
+  const sessionId = req.query.sessionId;
+  const transport = transports.get(sessionId) || Array.from(transports.values())[0];
+
   if (transport) {
     await transport.handlePostMessage(req, res);
   } else {
