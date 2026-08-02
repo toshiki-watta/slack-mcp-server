@@ -7,6 +7,14 @@ import { WebClient } from "@slack/web-api";
 const app = express();
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
+// OPTIONSリクエスト（プリフライト）に対して完全にOKを返す
+app.options("*", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "*");
+  res.sendStatus(200);
+});
+
 // CORSを全面的に許可
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
