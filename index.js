@@ -1,58 +1,79 @@
-import express from 'express';
-import { spawn } from 'child_process';
+import express from "express";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { WebClient } from "@slack/web-api";
 
 const app = express();
-const port = process.env.PORT || 3000;
+const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
-app.use(express.json());
+// MCP サーバーの初期化
+const server = new Server(
+  { name: "slack-mcp-server", version: "1.0.0" },
+  { capabilities: { tools: {} } }
+);
 
-let mcpProcess = null;
-
-// MCPサーバー（stdio）の起動
-function startMcpProcess() {
-  if (mcpProcess) return mcpProcess;
-
-  mcpProcess = spawn('npx', ['-y', '@modelcontextprotocol/server-slack'], {
-    env: {
-      ...process.env,
-      SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
-      SLACK_TEAM_ID: process.env.SLACK_TEAM_ID,
-    },
-    stdio: ['pipe', 'pipe', 'inherit'],
-  });
-
-  mcpProcess.on('exit', (code) => {
-    console.log(`MCP process exited with code ${code}`);
-    mcpProcess = null;
-  });
-
-  return mcpProcess;
-}
-
-// ヘルスチェック用
-app.get('/', (req, res) => {
-  res.send('Slack MCP Wrapper Server is Running');
-});
-
-// SSE エンドポイント
-app.get('/sse', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  const proc = startMcpProcess();
-
-  const onData = (data) => {
-    res.write(`data: ${data.toString()}\n\n`);
+// ツール一覧を定義
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "send_slack_message",
+        description: "Slackの指定したチャンネルにメッセージを送信します。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            channel: { type: "string", description: "チャンネル名またはID（例: #general）" },
+            text: { type: "string", description: "送信する本文" }
+          },
+          required: ["channel", "text"]
+        }
+      }
+    ]
   };
-
-  proc.stdout.on('data', onData);
-
-  req.on('close', () => {
-    proc.stdout.off('data', onData);
-  });
 });
 
-app.listen(port, () => {
-  console.log(`Slack MCP Wrapper listening on port ${port}`);
+// ツール呼び出し時の処理
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  if (request.params.name === "send_slack_message") {
+    const { channel, text } = request.params.arguments;
+    try {
+      const result = await slack.chat.postMessage({ channel, text });
+      return {
+        content: [{ type: "text", text: `メッセージを送信しました (TS: ${result.ts})` }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Slackエラー: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+  throw new Error("Tool not found");
+});
+
+// ヘルスチェック用エンドポイント
+app.get("/", (req, res) => {
+  res.send("Slack MCP Server is Running!");
+});
+
+// SSE 接続用エンドポイント
+let transport;
+app.get("/sse", async (req, res) => {
+  transport = new SSEServerTransport("/messages", res);
+  await server.connect(transport);
+});
+
+// メッセージ受信用エンドポイント
+app.post("/messages", async (req, res) => {
+  if (transport) {
+    await transport.handlePostMessage(req, res);
+  } else {
+    res.status(400).send("No active SSE session");
+  }
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`Slack MCP Server running on port ${PORT}`);
 });
